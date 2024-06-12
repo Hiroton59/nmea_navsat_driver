@@ -41,6 +41,7 @@ from tf_transformations import quaternion_from_euler
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
 from libnmea_navsat_driver import parser
 
+from my_messages.msg import FixType
 
 class Ros2NMEADriver(Node):
     def __init__(self):
@@ -50,6 +51,8 @@ class Ros2NMEADriver(Node):
         self.vel_pub = self.create_publisher(TwistStamped, 'vel', 10)
         self.heading_pub = self.create_publisher(QuaternionStamped, 'heading', 10)
         self.time_ref_pub = self.create_publisher(TimeReference, 'time_reference', 10)
+
+        self.fif_type_pub = self.create_publisher(FixType, 'fixtype', 10)
 
         self.time_ref_source = self.declare_parameter('time_ref_source', 'gps').value
         self.use_RMC = self.declare_parameter('useRMC', False).value
@@ -77,43 +80,57 @@ class Ros2NMEADriver(Node):
             -1: [
                 self.default_epe_quality0,
                 NavSatStatus.STATUS_NO_FIX,
-                NavSatFix.COVARIANCE_TYPE_UNKNOWN
+                NavSatFix.COVARIANCE_TYPE_UNKNOWN,
+                -1,
+                'Unknown'
             ],
             # Invalid
             0: [
                 self.default_epe_quality0,
                 NavSatStatus.STATUS_NO_FIX,
-                NavSatFix.COVARIANCE_TYPE_UNKNOWN
+                NavSatFix.COVARIANCE_TYPE_UNKNOWN,
+                0,
+                'Invalid'
             ],
             # SPS
             1: [
                 self.default_epe_quality1,
                 NavSatStatus.STATUS_FIX,
-                NavSatFix.COVARIANCE_TYPE_APPROXIMATED
+                NavSatFix.COVARIANCE_TYPE_APPROXIMATED,
+                1,
+                'SPS'
             ],
             # DGPS
             2: [
                 self.default_epe_quality2,
                 NavSatStatus.STATUS_SBAS_FIX,
-                NavSatFix.COVARIANCE_TYPE_APPROXIMATED
+                NavSatFix.COVARIANCE_TYPE_APPROXIMATED,
+                2,
+                'DGPS'
             ],
             # RTK Fix
             4: [
                 self.default_epe_quality4,
                 NavSatStatus.STATUS_GBAS_FIX,
-                NavSatFix.COVARIANCE_TYPE_APPROXIMATED
+                NavSatFix.COVARIANCE_TYPE_APPROXIMATED,
+                4,
+                'RTK Fix'
             ],
             # RTK Float
             5: [
                 self.default_epe_quality5,
                 NavSatStatus.STATUS_GBAS_FIX,
-                NavSatFix.COVARIANCE_TYPE_APPROXIMATED
+                NavSatFix.COVARIANCE_TYPE_APPROXIMATED,
+                5,
+                'RTK Float'
             ],
             # WAAS
             9: [
                 self.default_epe_quality9,
                 NavSatStatus.STATUS_GBAS_FIX,
-                NavSatFix.COVARIANCE_TYPE_APPROXIMATED
+                NavSatFix.COVARIANCE_TYPE_APPROXIMATED,
+                9,
+                'WAAS'
             ]
         }
 
@@ -191,6 +208,11 @@ class Ros2NMEADriver(Node):
             current_fix.position_covariance[8] = (2 * hdop * self.alt_std_dev) ** 2  # FIXME
 
             self.fix_pub.publish(current_fix)
+            
+            fixtype = FixType()
+            fixtype.gga_fix_number = gps_qual[3]
+            fixtype.fix_type = gps_qual[4]
+            self.fif_type_pub.publish(fixtype)
 
             if not math.isnan(data['utc_time']):
                 current_time_ref.time_ref = rclpy.time.Time(seconds=data['utc_time']).to_msg()
